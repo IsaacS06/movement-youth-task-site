@@ -85,6 +85,25 @@ h2.section {
 .tasks li::before { content: '-'; position: absolute; left: 4px; top: 10px; color: var(--fg); }
 .people-list { font-size: 19px; line-height: 28px; margin: 0; }
 .empty { color: var(--muted); font-size: 17px; }
+.search-label { display: block; font-size: 15px; text-transform: uppercase; letter-spacing: 1.5px; color: var(--muted); margin: 8px 0 8px; }
+.search {
+  width: 100%;
+  background: var(--card);
+  color: var(--fg);
+  border: 2px solid var(--line);
+  padding: 14px 16px;
+  font: inherit;
+  font-size: 20px;
+  min-height: 56px;
+  border-radius: 0;
+  -webkit-appearance: none;
+}
+.search::placeholder { color: #6b6b6b; }
+.search:focus-visible { outline: 3px solid var(--fg); outline-offset: 3px; }
+.results { margin-top: 12px; }
+.job-btn .name { text-transform: none; }
+.job-btn .job-name { font-size: 15px; color: var(--muted); white-space: nowrap; }
+.you { font-weight: bold; text-decoration: underline; }
 [hidden] { display: none !important; }
 </style>
 </head>
@@ -95,6 +114,11 @@ h2.section {
 </header>
 <main>
   <section id="list-view">
+    <label class="search-label" for="name-search">Find your job</label>
+    <input class="search" id="name-search" type="search" placeholder="Type your name" autocomplete="off" autocorrect="off" autocapitalize="words" spellcheck="false" autofocus>
+    <ul class="job-list results" id="search-results" hidden></ul>
+    <p class="empty" id="search-empty" hidden>No one found with that name. Try your first name, or pick your job below.</p>
+    <h2 class="section" id="all-jobs-heading">All jobs</h2>
     <ul class="job-list" id="job-list"></ul>
   </section>
   <section id="detail-view" hidden>
@@ -147,11 +171,63 @@ function renderList() {
     const btn = el("button", { className: "job-btn", type: "button" });
     btn.appendChild(el("span", {}, job.title));
     btn.appendChild(el("span", { className: "count" }, job.people.length + (job.people.length === 1 ? " person" : " people")));
-    btn.addEventListener("click", () => { location.hash = job.id; });
+    btn.addEventListener("click", () => { selectedName = null; location.hash = job.id; });
     li.appendChild(btn);
     jobList.appendChild(li);
   });
 }
+
+const searchInput = document.getElementById("name-search");
+const searchResults = document.getElementById("search-results");
+const searchEmpty = document.getElementById("search-empty");
+const allJobsHeading = document.getElementById("all-jobs-heading");
+let selectedName = null;
+
+const norm = s => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().trim();
+
+// One entry per person per job, so people with two jobs show both.
+const ASSIGNMENTS = JOBS.flatMap(job => job.people.map(name => ({ name, job, words: norm(name).split(/\s+/) })));
+
+function findMatches(query) {
+  const q = norm(query);
+  if (!q) return [];
+  const qWords = q.split(/\s+/);
+  return ASSIGNMENTS
+    .filter(a => norm(a.name).startsWith(q) || qWords.every(qw => a.words.some(w => w.startsWith(qw))))
+    .sort((a, b) => a.name.localeCompare(b.name) || a.job.title.localeCompare(b.job.title));
+}
+
+function openAssignment(a) {
+  selectedName = a.name;
+  location.hash = a.job.id;
+}
+
+function renderSearch() {
+  const query = searchInput.value;
+  const matches = findMatches(query);
+  const searching = norm(query) !== "";
+  searchResults.innerHTML = "";
+  matches.forEach(a => {
+    const li = el("li");
+    const btn = el("button", { className: "job-btn", type: "button" });
+    btn.appendChild(el("span", { className: "name" }, a.name));
+    btn.appendChild(el("span", { className: "job-name" }, a.job.title));
+    btn.addEventListener("click", () => openAssignment(a));
+    li.appendChild(btn);
+    searchResults.appendChild(li);
+  });
+  searchResults.hidden = matches.length === 0;
+  searchEmpty.hidden = !searching || matches.length > 0;
+  jobList.hidden = searching;
+  allJobsHeading.hidden = searching;
+}
+
+searchInput.addEventListener("input", renderSearch);
+searchInput.addEventListener("keydown", e => {
+  if (e.key !== "Enter") return;
+  const matches = findMatches(searchInput.value);
+  if (matches.length === 1) openAssignment(matches[0]);
+});
 
 function renderDetail(job) {
   document.getElementById("detail-title").textContent = job.title;
@@ -163,7 +239,12 @@ function renderDetail(job) {
   tasks.innerHTML = "";
   job.tasks.forEach(t => tasks.appendChild(el("li", {}, t)));
 
-  document.getElementById("detail-people").textContent = job.people.join(", ");
+  const people = document.getElementById("detail-people");
+  people.innerHTML = "";
+  job.people.forEach((p, i) => {
+    if (i) people.appendChild(document.createTextNode(", "));
+    people.appendChild(el("span", { className: p === selectedName ? "you" : "" }, p));
+  });
   document.title = job.title + " | Movement Youth Jobs";
 }
 
