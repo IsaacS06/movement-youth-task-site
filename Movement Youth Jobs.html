@@ -106,6 +106,42 @@ h2.section {
 .task input:focus-visible { outline: 3px solid var(--fg); outline-offset: 3px; }
 .task input:disabled { opacity: 0.35; cursor: default; }
 .task input:checked + span { color: var(--muted); text-decoration: line-through; }
+.dropdown { margin-top: 28px; }
+.dropdown summary {
+  list-style: none;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  padding: 16px 18px;
+  min-height: 56px;
+  font-size: 20px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+}
+.dropdown summary::-webkit-details-marker { display: none; }
+.dropdown summary::after { content: '▾'; font-size: 20px; transition: transform 0.15s; }
+.dropdown[open] summary::after { transform: rotate(180deg); }
+.dropdown summary:focus-visible { outline: 3px solid var(--fg); outline-offset: 3px; }
+#unfinished-count { margin-left: auto; font-size: 14px; color: var(--muted); text-transform: none; letter-spacing: 0; }
+.group { margin-top: 18px; }
+.group-title {
+  background: none;
+  border: none;
+  color: var(--fg);
+  font: inherit;
+  font-size: 17px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  padding: 4px 0;
+  cursor: pointer;
+}
+.group-title:focus-visible { outline: 3px solid var(--fg); outline-offset: 3px; }
 .sync { font-size: 14px; color: var(--muted); margin: 8px 0 0; }
 .sync::before { content: ''; display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #6b6b6b; margin-right: 8px; vertical-align: 1px; }
 .sync.live::before { background: #3ddc84; }
@@ -147,6 +183,10 @@ h2.section {
     <p class="empty" id="search-empty" hidden>No one found with that name. Try your first name, or pick your job below.</p>
     <h2 class="section" id="all-jobs-heading">All jobs</h2>
     <ul class="job-list" id="job-list"></ul>
+    <details id="unfinished" class="dropdown" hidden>
+      <summary>Unfinished tasks <span id="unfinished-count"></span></summary>
+      <div id="unfinished-list"></div>
+    </details>
   </section>
   <section id="detail-view" hidden>
     <button class="back" id="back-btn" type="button">Back to all jobs</button>
@@ -279,7 +319,49 @@ function el(tag, props = {}, text) {
   return node;
 }
 
+function taskRow(job, task) {
+  const key = taskKey(task);
+  const li = el("li");
+  const label = el("label", { className: "task" });
+  const box = el("input", { type: "checkbox", disabled: !db, checked: isDone(job.id, key) });
+  box.dataset.key = key;
+  box.addEventListener("change", () => {
+    fb.set(fb.ref(db, `checks/${nightKey}/${job.id}/${key}`), box.checked ? true : null);
+  });
+  label.appendChild(box);
+  label.appendChild(el("span", {}, task));
+  li.appendChild(label);
+  return li;
+}
+
+function renderUnfinished() {
+  const section = document.getElementById("unfinished");
+  const list = document.getElementById("unfinished-list");
+  const searching = searchInput && norm(searchInput.value) !== "";
+  section.hidden = !db || searching;
+  if (section.hidden) return;
+
+  list.innerHTML = "";
+  let total = 0;
+  JOBS.forEach(job => {
+    const left = job.tasks.filter(t => !isDone(job.id, taskKey(t)));
+    if (!left.length) return;
+    total += left.length;
+    const group = el("div", { className: "group" });
+    const title = el("button", { className: "group-title", type: "button" }, job.title);
+    title.addEventListener("click", () => { selectedName = null; location.hash = job.id; });
+    group.appendChild(title);
+    const ul = el("ul", { className: "tasks" });
+    left.forEach(t => ul.appendChild(taskRow(job, t)));
+    group.appendChild(ul);
+    list.appendChild(group);
+  });
+  document.getElementById("unfinished-count").textContent = total + " left tonight";
+  if (!total) list.appendChild(el("p", { className: "empty" }, "Everything's done tonight. Nice work!"));
+}
+
 function renderList() {
+  renderUnfinished();
   jobList.innerHTML = "";
   JOBS.forEach(job => {
     const li = el("li");
@@ -337,6 +419,7 @@ function renderSearch() {
   searchEmpty.hidden = !searching || matches.length > 0;
   jobList.hidden = searching;
   allJobsHeading.hidden = searching;
+  renderUnfinished();
 }
 
 searchInput.addEventListener("input", renderSearch);
@@ -355,20 +438,7 @@ function renderDetail(job) {
   currentJob = job;
   const tasks = document.getElementById("detail-tasks");
   tasks.innerHTML = "";
-  job.tasks.forEach(t => {
-    const key = taskKey(t);
-    const li = el("li");
-    const label = el("label", { className: "task" });
-    const box = el("input", { type: "checkbox", disabled: !db });
-    box.dataset.key = key;
-    box.addEventListener("change", () => {
-      fb.set(fb.ref(db, `checks/${nightKey}/${job.id}/${key}`), box.checked ? true : null);
-    });
-    label.appendChild(box);
-    label.appendChild(el("span", {}, t));
-    li.appendChild(label);
-    tasks.appendChild(li);
-  });
+  job.tasks.forEach(t => tasks.appendChild(taskRow(job, t)));
   refreshChecks();
 
   const people = document.getElementById("detail-people");
