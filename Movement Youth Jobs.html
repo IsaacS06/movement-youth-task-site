@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Movement Youth Jobs</title>
+<style>
+:root {
+  color-scheme: dark;
+  --bg: #000000;
+  --fg: #ffffff;
+  --muted: #a3a3a3;
+  --line: #ffffff;
+  --card: #0d0d0d;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--bg); color: var(--fg); }
+body {
+  font-family: 'Trebuchet MS', Arial, Helvetica, sans-serif;
+  padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
+  min-height: 100vh;
+}
+header {
+  padding: 24px 20px 16px;
+  border-bottom: 2px solid var(--line);
+  position: sticky;
+  top: 0;
+  background: var(--bg);
+  z-index: 2;
+}
+header h1 { margin: 0; font-size: 28px; line-height: 34px; text-transform: uppercase; letter-spacing: 1px; }
+header p { margin: 6px 0 0; color: var(--muted); font-size: 15px; }
+main { max-width: 760px; margin: 0 auto; padding: 16px 20px 40px; }
+.back {
+  background: none;
+  color: var(--fg);
+  border: 2px solid var(--line);
+  padding: 10px 16px;
+  font-size: 16px;
+  cursor: pointer;
+  margin-bottom: 20px;
+  min-height: 44px;
+}
+.job-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+.job-btn {
+  width: 100%;
+  text-align: left;
+  background: var(--card);
+  color: var(--fg);
+  border: 1px solid var(--line);
+  padding: 16px 18px;
+  min-height: 56px;
+  font: inherit;
+  font-size: 20px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+.job-btn:focus-visible, .back:focus-visible { outline: 3px solid var(--fg); outline-offset: 3px; }
+.job-btn .count { font-size: 14px; color: var(--muted); text-transform: none; white-space: nowrap; }
+.job-title { margin: 0; font-size: 32px; line-height: 38px; text-transform: uppercase; letter-spacing: 0.5px; font-weight: normal; }
+.job-sub { margin: 6px 0 0; color: var(--muted); font-size: 17px; }
+h2.section {
+  font-size: 15px;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  color: var(--muted);
+  font-weight: normal;
+  margin: 28px 0 10px;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 6px;
+}
+.tasks { list-style: none; margin: 0; padding: 0; }
+.tasks li {
+  position: relative;
+  padding: 12px 0 12px 26px;
+  border-bottom: 1px solid #333;
+  font-size: 19px;
+  line-height: 26px;
+}
+.tasks li::before { content: '-'; position: absolute; left: 4px; top: 10px; color: var(--fg); }
+.people-list { font-size: 19px; line-height: 28px; margin: 0; }
+.empty { color: var(--muted); font-size: 17px; }
+[hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Movement Youth Jobs</h1>
+  <p id="header-sub">Choose your job to see the tasks</p>
+</header>
+<main>
+  <section id="list-view">
+    <ul class="job-list" id="job-list"></ul>
+  </section>
+  <section id="detail-view" hidden>
+    <button class="back" id="back-btn" type="button">Back to all jobs</button>
+    <h1 class="job-title" id="detail-title"></h1>
+    <p class="job-sub" id="detail-sub"></p>
+    <h2 class="section">Tasks</h2>
+    <ul class="tasks" id="detail-tasks"></ul>
+    <h2 class="section">Assigned</h2>
+    <p class="people-list" id="detail-people"></p>
+  </section>
+</main>
+<script>
+const JOBS = [
+  { id: "board-game-room", title: "Board Game Room", tasks: ["Put board games away properly", "Wipe down tables", "Pack up loose pieces and dice"], people: ["Abbey Laaper", "Joyce Zamora", "Melissa Bartley"] },
+  { id: "art-room", title: "Art Room", tasks: ["Collect markers, paints and brushes", "Wash brushes", "Put supplies in their bins", "Wipe tables", "Inform Pastor Isaiah via Whatsapp re: inventory"], people: ["Kate Doan", "Shania Schmidt"] },
+  { id: "arcade", title: "Arcade", tasks: ["Turn off the machines", "Put away controllers", "Return Wii to Kid’s Aud"], people: ["Yaneth Andrade", "Aaron Howe", "Hayden Cocchetto"] },
+  { id: "outdoor-sports", title: "Outdoor Sports", tasks: ["Collect volleyballs, basketballs, etc. and put away", "Check the court and area for trash"], people: ["Eira Feairs", "Jesse Froese"] },
+  { id: "video-game-room", title: "Video Game Room", tasks: ["Put away cornhole bags and boards", "Collect and put away four-in-a-row pieces", "Turn off air hockey and put away", "Tidy room", "Put away chairs on Small Group Nights"], people: ["Andres Prado", "Jeff Faber", "Lily Jones"] },
+  { id: "check-in-station", title: "Check-In Station", tasks: ["Take the iPads, power them down, and plug them in to charge", "Fold the tablecloths and put them away", "Return the TV to Closet"], people: ["Melissa Gillard", "Sarah Donkers", "Carolyn Endersby", "Carolyn Axiotis", "Aleshia Wattie"] },
+  { id: "game-supplies", title: "Game Supplies", tasks: ["Sort and return all game pieces and equipment to the storage closet", "Check that nothing is missing"], people: ["Corissa Engel"] },
+  { id: "new-student-room", title: "New Student Room", tasks: ["Put all paperwork and iPads away in their proper places", "Turn off and put lights away", "Check that nothing is left on surfaces"], people: ["Shanson Armstrong", "Taylor McCollum", "Hayden Gower", "Ava Ropp"] },
+  { id: "production-team", title: "Production Team", tasks: ["Turn off the sound system and board", "Unplug and coil cables on Worship Nights", "Ensure Microphones are put away"], people: ["Aaron Engel", "KR Moore", "Isaac Street"] },
+  { id: "tuck-shop", title: "Tuck Shop", tasks: ["Clean Up Tuck", "Wipe counters", "Empty the fridge of youth inventory", "Cash-out", "Make sure garbage is away", "Refill slushie machine"], people: ["Ana Maria Ayala Arboleda", "Jeff Feairs", "Sarah Street", "Jason Street"] },
+  { id: "club-56-room", title: "Club 56 Room", tasks: ["Straighten all chairs", "Pick up any garbage", "Make sure the room is fully set up and ready for Sunday morning"], people: ["Dawson Godbout", "Olivia Garner", "Gabriel Navas"] },
+  { id: "tables", title: "Tables", sub: "Activity Rooms, Hallways, Lobby, Etc.", tasks: ["Tear down all tables", "Put away in proper storage"], people: ["Zach Price", "Joe Swarath", "Nevin Cook", "Gavin Laaper"] },
+  { id: "lights", title: "Lights", sub: "Hallways, Lobby, Etc.", tasks: ["Put away in proper storage"], people: ["Emma Izzard", "Isaiah Adeshigbin"] },
+  { id: "bathrooms", title: "Bathrooms", sub: "Allllll the ones students have access to!", tasks: ["Go through stalls", "Pick up anything left behind", "Wipe counters", "Make sure stalls are unlocked", "Turn off lights"], people: ["Cynthia Tupling", "Lisa Ross", "Sara McNeill", "Hadassah Scholten"] },
+  { id: "photography", title: "Photography", tasks: ["Return SD card(s) to Arianna’s desk", "Put cameras away", "Charge Batteries"], people: ["Rebekah Barrett", "Dawson Godbout"] },
+  { id: "chairs", title: "Chairs", sub: "Main Aud", tasks: ["Straighten chairs", "Put rows back in"], people: ["Ken Drane", "Jesse Froese", "Eira Feairs", "Marlon Martes", "Brooke Wegman", "Hayden Gower", "Owen Donkers", "Sarah Koncir", "Nick Kippenhuck"] },
+  { id: "pipe-and-drape", title: "Pipe & Drape", sub: "Across all rooms", tasks: ["Take down Pipe and Drape from Activity Rooms", "Put it up PROPERLY in Main Aud"], people: ["Cody Chute", "Tyler Christie", "Nathan Hannon"] }
+];
+
+const listView = document.getElementById("list-view");
+const detailView = document.getElementById("detail-view");
+const jobList = document.getElementById("job-list");
+const headerSub = document.getElementById("header-sub");
+
+function el(tag, props = {}, text) {
+  const node = document.createElement(tag);
+  Object.assign(node, props);
+  if (text !== undefined) node.textContent = text;
+  return node;
+}
+
+function renderList() {
+  jobList.innerHTML = "";
+  JOBS.forEach(job => {
+    const li = el("li");
+    const btn = el("button", { className: "job-btn", type: "button" });
+    btn.appendChild(el("span", {}, job.title));
+    btn.appendChild(el("span", { className: "count" }, job.people.length + (job.people.length === 1 ? " person" : " people")));
+    btn.addEventListener("click", () => { location.hash = job.id; });
+    li.appendChild(btn);
+    jobList.appendChild(li);
+  });
+}
+
+function renderDetail(job) {
+  document.getElementById("detail-title").textContent = job.title;
+  const sub = document.getElementById("detail-sub");
+  sub.textContent = job.sub || "";
+  sub.hidden = !job.sub;
+
+  const tasks = document.getElementById("detail-tasks");
+  tasks.innerHTML = "";
+  job.tasks.forEach(t => tasks.appendChild(el("li", {}, t)));
+
+  document.getElementById("detail-people").textContent = job.people.join(", ");
+  document.title = job.title + " | Movement Youth Jobs";
+}
+
+function route() {
+  const id = decodeURIComponent(location.hash.replace(/^#/, ""));
+  const job = JOBS.find(j => j.id === id);
+  if (job) {
+    renderDetail(job);
+    listView.hidden = true;
+    detailView.hidden = false;
+    headerSub.textContent = "Tasks for this job";
+    window.scrollTo(0, 0);
+  } else {
+    listView.hidden = false;
+    detailView.hidden = true;
+    headerSub.textContent = "Choose your job to see the tasks";
+    document.title = "Movement Youth Jobs";
+  }
+}
+
+document.getElementById("back-btn").addEventListener("click", () => {
+  history.pushState("", document.title, location.pathname + location.search);
+  route();
+});
+window.addEventListener("hashchange", route);
+
+renderList();
+route();
+</script>
+</body>
+</html>
