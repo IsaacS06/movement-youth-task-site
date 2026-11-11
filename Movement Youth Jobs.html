@@ -76,13 +76,40 @@ h2.section {
 }
 .tasks { list-style: none; margin: 0; padding: 0; }
 .tasks li {
-  position: relative;
-  padding: 12px 0 12px 26px;
   border-bottom: 1px solid #333;
   font-size: 19px;
   line-height: 26px;
 }
-.tasks li::before { content: '-'; position: absolute; left: 4px; top: 10px; color: var(--fg); }
+.task { display: flex; gap: 14px; align-items: flex-start; padding: 12px 0; min-height: 50px; cursor: pointer; }
+.task input {
+  -webkit-appearance: none;
+  appearance: none;
+  flex: none;
+  width: 26px;
+  height: 26px;
+  margin: 0;
+  border: 2px solid var(--fg);
+  background: transparent;
+  display: grid;
+  place-content: center;
+  cursor: pointer;
+}
+.task input:checked { background: var(--fg); }
+.task input:checked::after {
+  content: '';
+  width: 7px;
+  height: 13px;
+  border: solid var(--bg);
+  border-width: 0 3px 3px 0;
+  transform: translateY(-2px) rotate(45deg);
+}
+.task input:focus-visible { outline: 3px solid var(--fg); outline-offset: 3px; }
+.task input:disabled { opacity: 0.35; cursor: default; }
+.task input:checked + span { color: var(--muted); text-decoration: line-through; }
+.sync { font-size: 14px; color: var(--muted); margin: 8px 0 0; }
+.sync::before { content: ''; display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #6b6b6b; margin-right: 8px; vertical-align: 1px; }
+.sync.live::before { background: #3ddc84; }
+.sync.off::before { background: #ff5c5c; }
 .people-list { font-size: 19px; line-height: 28px; margin: 0; }
 .empty { color: var(--muted); font-size: 17px; }
 .search-label { display: block; font-size: 15px; text-transform: uppercase; letter-spacing: 1.5px; color: var(--muted); margin: 8px 0 8px; }
@@ -125,8 +152,9 @@ h2.section {
     <button class="back" id="back-btn" type="button">Back to all jobs</button>
     <h1 class="job-title" id="detail-title"></h1>
     <p class="job-sub" id="detail-sub"></p>
-    <h2 class="section">Tasks</h2>
+    <h2 class="section">Tasks <span id="detail-progress"></span></h2>
     <ul class="tasks" id="detail-tasks"></ul>
+    <p class="sync" id="sync-status">Connecting…</p>
     <h2 class="section">Assigned</h2>
     <p class="people-list" id="detail-people"></p>
   </section>
@@ -157,6 +185,93 @@ const detailView = document.getElementById("detail-view");
 const jobList = document.getElementById("job-list");
 const headerSub = document.getElementById("header-sub");
 
+// ---- Shared checkmarks (Firebase Realtime Database) ----
+// Checks are stored under checks/<night>/<jobId>/<taskKey> = true.
+// A "night" runs until 4am, so each new night starts with a clean list.
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyB2iX0SJNxhxqemFUiAmmjNv63SjEtf-M4",
+  authDomain: "movement-youth-jobs.firebaseapp.com",
+  databaseURL: "https://movement-youth-jobs-default-rtdb.firebaseio.com",
+  projectId: "movement-youth-jobs",
+  storageBucket: "movement-youth-jobs.firebasestorage.app",
+  messagingSenderId: "1048757943956",
+  appId: "1:1048757943956:web:5e3ad67eebe275fdf47e81"
+};
+const FIREBASE_VERSION = "10.12.2";
+const NIGHT_CUTOFF_HOURS = 4;
+
+let fb = null;          // firebase-database module
+let db = null;          // database instance
+let checks = {};        // { jobId: { taskKey: true } } for tonight
+let nightKey = currentNight();
+let unsubscribe = null;
+let currentJob = null;
+
+function currentNight() {
+  const d = new Date(Date.now() - NIGHT_CUTOFF_HOURS * 3600 * 1000);
+  const pad = n => String(n).padStart(2, "0");
+  return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate());
+}
+
+function taskKey(task) {
+  return task.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+}
+
+function isDone(jobId, key) { return !!(checks[jobId] && checks[jobId][key]); }
+function doneCount(job) { return job.tasks.filter(t => isDone(job.id, taskKey(t))).length; }
+
+function setStatus(state) {
+  const s = document.getElementById("sync-status");
+  s.className = "sync" + (state === true ? " live" : state === null ? " off" : "");
+  s.textContent = state === true ? "Live: checks show for everyone and reset each night"
+    : state === null ? "Couldn't connect, so checkboxes are off. Check your internet and reload."
+    : "Reconnecting… your checks will sync when you're back online";
+}
+
+function refreshChecks() {
+  if (currentJob) {
+    document.querySelectorAll("#detail-tasks input").forEach(box => {
+      box.checked = isDone(currentJob.id, box.dataset.key);
+      box.disabled = !db;
+    });
+    document.getElementById("detail-progress").textContent =
+      db ? "· " + doneCount(currentJob) + " of " + currentJob.tasks.length + " done" : "";
+  }
+  if (!listView.hidden) renderList();
+}
+
+function subscribe() {
+  if (unsubscribe) unsubscribe();
+  checks = {};
+  unsubscribe = fb.onValue(fb.ref(db, "checks/" + nightKey), snap => {
+    checks = snap.val() || {};
+    refreshChecks();
+  }, () => setStatus(null));
+}
+
+async function startSync() {
+  try {
+    const base = "https://www.gstatic.com/firebasejs/" + FIREBASE_VERSION + "/";
+    const [appMod, dbMod] = await Promise.all([
+      import(base + "firebase-app.js"),
+      import(base + "firebase-database.js")
+    ]);
+    fb = dbMod;
+    db = fb.getDatabase(appMod.initializeApp(FIREBASE_CONFIG));
+    fb.onValue(fb.ref(db, ".info/connected"), snap => setStatus(snap.val() === true));
+    subscribe();
+    // Roll over to a fresh list if the page is left open past the cutoff.
+    setInterval(() => {
+      const k = currentNight();
+      if (k !== nightKey) { nightKey = k; subscribe(); }
+    }, 60 * 1000);
+  } catch (err) {
+    console.error(err);
+    setStatus(null);
+  }
+}
+
 function el(tag, props = {}, text) {
   const node = document.createElement(tag);
   Object.assign(node, props);
@@ -170,7 +285,9 @@ function renderList() {
     const li = el("li");
     const btn = el("button", { className: "job-btn", type: "button" });
     btn.appendChild(el("span", {}, job.title));
-    btn.appendChild(el("span", { className: "count" }, job.people.length + (job.people.length === 1 ? " person" : " people")));
+    let count = job.people.length + (job.people.length === 1 ? " person" : " people");
+    if (db) count += " · " + doneCount(job) + "/" + job.tasks.length + " done";
+    btn.appendChild(el("span", { className: "count" }, count));
     btn.addEventListener("click", () => { selectedName = null; location.hash = job.id; });
     li.appendChild(btn);
     jobList.appendChild(li);
@@ -235,9 +352,24 @@ function renderDetail(job) {
   sub.textContent = job.sub || "";
   sub.hidden = !job.sub;
 
+  currentJob = job;
   const tasks = document.getElementById("detail-tasks");
   tasks.innerHTML = "";
-  job.tasks.forEach(t => tasks.appendChild(el("li", {}, t)));
+  job.tasks.forEach(t => {
+    const key = taskKey(t);
+    const li = el("li");
+    const label = el("label", { className: "task" });
+    const box = el("input", { type: "checkbox", disabled: !db });
+    box.dataset.key = key;
+    box.addEventListener("change", () => {
+      fb.set(fb.ref(db, `checks/${nightKey}/${job.id}/${key}`), box.checked ? true : null);
+    });
+    label.appendChild(box);
+    label.appendChild(el("span", {}, t));
+    li.appendChild(label);
+    tasks.appendChild(li);
+  });
+  refreshChecks();
 
   const people = document.getElementById("detail-people");
   people.innerHTML = "";
@@ -258,6 +390,8 @@ function route() {
     headerSub.textContent = "Tasks for this job";
     window.scrollTo(0, 0);
   } else {
+    currentJob = null;
+    renderList();
     listView.hidden = false;
     detailView.hidden = true;
     headerSub.textContent = "Choose your job to see the tasks";
@@ -273,6 +407,7 @@ window.addEventListener("hashchange", route);
 
 renderList();
 route();
+startSync();
 </script>
 </body>
 </html>
