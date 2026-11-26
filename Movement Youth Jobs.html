@@ -228,14 +228,11 @@ const headerSub = document.getElementById("header-sub");
 // ---- Shared checkmarks (Firebase Realtime Database) ----
 // Checks are stored under checks/<night>/<jobId>/<taskKey> = true.
 // A "night" runs until 4am, so each new night starts with a clean list.
+// Only the database is used, so no API key is needed. Access is controlled
+// by the database's security rules in the Firebase console.
 const FIREBASE_CONFIG = {
-  apiKey: "AIzaSyB2iX0SJNxhxqemFUiAmmjNv63SjEtf-M4",
-  authDomain: "movement-youth-jobs.firebaseapp.com",
   databaseURL: "https://movement-youth-jobs-default-rtdb.firebaseio.com",
-  projectId: "movement-youth-jobs",
-  storageBucket: "movement-youth-jobs.firebasestorage.app",
-  messagingSenderId: "1048757943956",
-  appId: "1:1048757943956:web:5e3ad67eebe275fdf47e81"
+  projectId: "movement-youth-jobs"
 };
 const FIREBASE_VERSION = "10.12.2";
 const NIGHT_CUTOFF_HOURS = 4;
